@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Molecular Visualizer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;500;700&display=swap');
+
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #050505; 
+            font-family: 'Rajdhani', sans-serif; 
+            color: #fff;
+        }
+        
+        canvas { display: block; }
+
+        /* HUD OVERLAY */
+        #hud {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* TOP HEADER */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 15px;
+        }
+        
+        .brand { font-weight: 700; color: #00f3ff; font-size: 18px; }
+
+        /* CENTER AI FEEDBACK */
+        #ai-feedback {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: none;
+        }
+        
+        .ai-text {
+            font-size: 24px;
+            font-weight: 300;
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+            margin-bottom: 10px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        .ai-subtext {
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        /* BOTTOM CONTROLS */
+        .controls {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            pointer-events: auto;
+            gap: 20px;
+        }
+
+        #mic-btn {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #mic-btn.listening {
+            border-color: #00f3ff;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+            animation: pulse 1.5s infinite;
+        }
+
+        #mic-btn.processing {
+            border-color: #ff0055;
+            box-shadow: 0 0 30px rgba(255, 0, 85, 0.3);
+        }
+
+        #waveform {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 100px;
+            height: 40px;
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+        }
+        .bar { width: 3px; background: #00f3ff; opacity: 0.7; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* START OVERLAY */
+        #overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        button.start-btn {
+            background: transparent;
+            border: 1px solid #00f3ff;
+            color: #00f3ff;
+            padding: 15px 40px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 18px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button.start-btn:hover { background: #00f3ff; color: #000; box-shadow: 0 0 30px #00f3ff; }
+
+    </style>
+</head>
+<body>
+
+    <!-- START SCREEN -->
+    <div id="overlay">
+        <h1 style="font-weight: 300; letter-spacing: 5px; margin-bottom: 5px;">QUANTUM<span style="color:#00f3ff; font-weight:700">VIS</span></h1>
+        <p style="color:#666; margin-bottom: 30px;">GEN-AI MOLECULAR INTERFACE</p>
+        <button class="start-btn" id="init-btn">Initialize System</button>
+    </div>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div class="header">
+            <div class="brand">GEN-UI / 0.1</div>
+            <div id="connection-status">SYSTEM READY</div>
+        </div>
+
+        <div id="ai-feedback">
+            <div class="ai-text" id="main-text"></div>
+            <div class="ai-subtext" id="sub-text"></div>
+        </div>
+
+        <div class="controls">
+            <button id="mic-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+        </div>
+        
+        <div id="waveform">
+            <!-- Bars injected by JS -->
+        </div>
+    </div>
+
+    <!-- Three.js & Logic -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        /**
+         * ------------------------------------------------------------------
+         * PART 1: DATA LAYER (The "LLM" Simulation)
+         * In a real product, this would be fetched from OpenAI/PubChem API.
+         * ------------------------------------------------------------------
+         */
+        
+        const ATOM_COLORS = {
+            'C': new THREE.Color('#333333'), // Carbon (Dark Grey)
+            'H': new THREE.Color('#ffffff'), // Hydrogen (White)
+            'O': new THREE.Color('#ff0055'), // Oxygen (Red/Pink)
+            'N': new THREE.Color('#00f3ff'), // Nitrogen (Cyan)
+            'Au': new THREE.Color('#ffd700'), // Gold
+            'S': new THREE.Color('#ffff00')  // Sulfur
+        };
+
+        const ATOM_SIZES = { 'H': 0.6, 'C': 1.0, 'N': 1.1, 'O': 1.1, 'Au': 2.0 };
+
+        // Hardcoded simplified coordinates for demo molecules
+        const MOLECULES = {
+            'dopamine': {
+                name: "Dopamine (C8H11NO2)",
+                desc: "Neurotransmitter associated with pleasure and motivation.",
+                // Simplified geometry: Benzene ring + tails
+                atoms: [
+                    {e:'C', x:0, y:0, z:0}, {e:'C', x:1.4, y:0, z:0}, {e:'C', x:2.1, y:1.2, z:0}, 
+                    {e:'C', x:1.4, y:2.4, z:0}, {e:'C', x:0, y:2.4, z:0}, {e:'C', x:-0.7, y:1.2, z:0}, // Ring
+                    {e:'O', x:3.5, y:1.2, z:0}, {e:'O', x:2.1, y:3.6, z:0}, // OH groups
+                    {e:'C', x:-2.2, y:1.2, z:0}, {e:'C', x:-2.9, y:2.4, z:0.5}, // Tail
+                    {e:'N', x:-4.3, y:2.4, z:0.5}, // Nitrogen
+                    {e:'H', x:-0.5, y:-0.9, z:0}, {e:'H', x:1.9, y:-0.9, z:0} // Some hydrogens
+                ]
+            },
+            'caffeine': {
+                name: "Caffeine (C8H10N4O2)",
+                desc: "Central nervous system stimulant.",
+                atoms: [
+                    {e:'N', x:0, y:0, z:0}, {e:'C', x:1.3, y:0, z:0}, {e:'N', x:2.0, y:1.1, z:0}, 
+                    {e:'C', x:1.1, y:2.2, z:0}, {e:'C', x:-0.2, y:2.2, z:0}, {e:'C', x:-0.9, y:1.1, z:0},
+                    {e:'O', x:1.6, y:3.3, z:0}, {e:'O', x:-2.1, y:1.1, z:0},
+                    {e:'N', x:1.3, y:-1.4, z:0}, {e:'C', x:2.5, y:-1.8, z:0}, {e:'N', x:3.0, y:-0.6, z:0}
+                ]
+            },
+            'serotonin': {
+                name: "Serotonin (C10H12N2O)",
+                desc: "Key hormone that stabilizes mood, feelings of well-being.",
+                atoms: [
+                    {e:'C', x:0, y:0, z:0}, {e:'C', x:1.4, y:0, z:0}, {e:'C', x:2.1, y:1.2, z:0},
+                    {e:'C', x:1.4, y:2.4, z:0}, {e:'C', x:0, y:2.4, z:0}, {e:'C', x:-0.7, y:1.2, z:0},
+                    {e:'N', x:-2.0, y:0.5, z:0}, {e:'C', x:-3.0, y:1.5, z:0}, {e:'C', x:-2.2, y:2.5, z:0},
+                    {e:'O', x:3.5, y:1.2, z:0}
+                ]
+            },
+            'gold': {
+                name: "Gold Cluster (Au)",
+                desc: "Dense metallic lattice structure.",
+                atoms: [] // Generated algorithmically below
+            },
+            'water': {
+                name: "Water (H2O)",
+                desc: "The essence of life.",
+                atoms: [
+                    {e:'O', x:0, y:0, z:0}, {e:'H', x:0.8, y:0.6, z:0}, {e:'H', x:-0.8, y:0.6, z:0}
+                ]
+            }
+        };
+
+        // Generate Gold Cluster algorithmically
+        for(let i=0; i<30; i++) {
+            MOLECULES['gold'].atoms.push({
+                e: 'Au', 
+                x: (Math.random()-0.5)*4, 
+                y: (Math.random()-0.5)*4, 
+                z: (Math.random()-0.5)*4 
+            });
+        }
+
+        /**
+         * ------------------------------------------------------------------
+         * PART 2: SYSTEM CONFIG & AUDIO
+         * ------------------------------------------------------------------
+         */
+        let audioContext, analyser, dataArray;
+        let isListening = false;
+        let currentVoiceVolume = 0;
+
+        async function initAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                // Visualization bars
+                const waveContainer = document.getElementById('waveform');
+                for(let i=0; i<10; i++){
+                    const d = document.createElement('div');
+                    d.className = 'bar';
+                    d.style.height = '10px';
+                    waveContainer.appendChild(d);
+                }
+            } catch(e) {
+                console.error("Audio Init Failed", e);
+                alert("Microphone access required for voice interaction.");
+            }
+        }
+
+        function updateAudio() {
+            if(!analyser) return;
+            analyser.getByteFrequencyData(dataArray);
+            
+            // Calculate average volume for reactivity
+            let sum = 0;
+            for(let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            currentVoiceVolume = sum / dataArray.length; // 0 to 255
+
+            // Update UI Bars
+            const bars = document.querySelectorAll('.bar');
+            bars.forEach((bar, i) => {
+                const val = dataArray[i * 2];
+                bar.style.height = Math.max(5, (val / 5)) + 'px';
+            });
+        }
+
+        /**
+         * ------------------------------------------------------------------
+         * PART 3: THREE.JS VISUALIZATION
+         * ------------------------------------------------------------------
+         */
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.03);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 12;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        // Particle System State
+        let particlesSystem;
+        let originalPositions = [];
+        let time = 0;
+
+        // Create the particle texture (Soft Glow)
+        const getTexture = () => {
+            const c = document.createElement('canvas');
+            c.width = 32; c.height = 32;
+            const ctx = c.getContext('2d');
+            const g = ctx.createRadialGradient(16,16,0,16,16,16);
+            g.addColorStop(0, 'rgba(255,255,255,1)');
+            g.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+            g.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.fillRect(0,0,32,32);
+            return new THREE.Texture(c);
+        };
+        
+        const particleTexture = getTexture();
+        particleTexture.needsUpdate = true;
+
+        /**
+         * Generates a molecular cloud structure
+         */
+        function generateMolecule(type) {
+            // Cleanup old
+            if(particlesSystem) {
+                scene.remove(particlesSystem);
+                particlesSystem.geometry.dispose();
+            }
+
+            const data = MOLECULES[type] || MOLECULES['dopamine'];
+            
+            // UI Update
+            updateAIStatus(data.name, data.desc);
+
+            const particleCount = 4000; 
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            const sizes = [];
+            
+            originalPositions = []; // Store targets
+
+            const atoms = data.atoms;
+
+            // Generate particles
+            for(let i=0; i<particleCount; i++) {
+                // Pick a random atom from the molecule to belong to
+                const atom = atoms[Math.floor(Math.random() * atoms.length)];
+                
+                // Base Color
+                const c = ATOM_COLORS[atom.e] || new THREE.Color(1,1,1);
+                
+                // Atom radius
+                const radius = (ATOM_SIZES[atom.e] || 1.0) * 0.8;
+
+                // Random point inside sphere logic
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos((Math.random() * 2) - 1);
+                const r = Math.cbrt(Math.random()) * radius; // Uniform distribution
+
+                const x = atom.x + (r * Math.sin(phi) * Math.cos(theta));
+                const y = atom.y + (r * Math.sin(phi) * Math.sin(theta));
+                const z = atom.z + (r * Math.cos(phi));
+
+                positions.push(x, y, z);
+                colors.push(c.r, c.g, c.b);
+                sizes.push(Math.random() * 0.5); // Random particle size variation
+
+                originalPositions.push({x, y, z, atomX: atom.x, atomY: atom.y, atomZ: atom.z});
+            }
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+
+            // Shader Material for advanced control
+            const material = new THREE.PointsMaterial({
+                size: 0.2,
+                vertexColors: true,
+                map: particleTexture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            particlesSystem = new THREE.Points(geometry, material);
+            
+            // Center the molecule
+            const box = new THREE.Box3().setFromObject(particlesSystem);
+            const center = box.getCenter(new THREE.Vector3());
+            particlesSystem.position.sub(center);
+
+            scene.add(particlesSystem);
+        }
+
+        /**
+         * ------------------------------------------------------------------
+         * PART 4: VOICE INTERACTION (Web Speech API)
+         * ------------------------------------------------------------------
+         */
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                document.getElementById('mic-btn').classList.add('listening');
+                updateAIStatus("LISTENING...", "Speak: 'Show me Dopamine'");
+            };
+
+            recognition.onend = () => {
+                document.getElementById('mic-btn').classList.remove('listening');
+                if(!isListening) updateAIStatus("", ""); // idle
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript.toLowerCase();
+                console.log("Heard:", transcript);
+                processIntent(transcript);
+            };
+        } else {
+            alert("Speech API not supported in this browser. Use Chrome/Edge.");
+        }
+
+        function processIntent(text) {
+            document.getElementById('mic-btn').classList.add('processing');
+            updateAIStatus("PROCESSING...", "Analyzing intent");
+
+            setTimeout(() => {
+                document.getElementById('mic-btn').classList.remove('processing');
+                
+                // Simple Keyword Matching (The Mock LLM)
+                if (text.includes('dopamine')) generateMolecule('dopamine');
+                else if (text.includes('caffeine') || text.includes('coffee')) generateMolecule('caffeine');
+                else if (text.includes('serotonin') || text.includes('happy')) generateMolecule('serotonin');
+                else if (text.includes('gold')) generateMolecule('gold');
+                else if (text.includes('water') || text.includes('h2o')) generateMolecule('water');
+                else {
+                    updateAIStatus("UNKNOWN MOLECULE", "Try: Dopamine, Caffeine, Gold, Water");
+                }
+            }, 800); // Fake delay for "thinking"
+        }
+
+        // --- UI HELPER ---
+        function updateAIStatus(main, sub) {
+            const m = document.getElementById('main-text');
+            const s = document.getElementById('sub-text');
+            
+            m.style.opacity = 0; s.style.opacity = 0;
+            
+            setTimeout(() => {
+                m.innerText = main;
+                s.innerText = sub;
+                m.style.opacity = 1; s.style.opacity = 1;
+            }, 300);
+        }
+
+        // --- EVENTS ---
+        document.getElementById('init-btn').addEventListener('click', () => {
+            document.getElementById('overlay').style.display = 'none';
+            initAudio();
+            generateMolecule('dopamine'); // Default start
+        });
+
+        document.getElementById('mic-btn').addEventListener('click', () => {
+            if(recognition) recognition.start();
+        });
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+            updateAudio();
+
+            if (particlesSystem) {
+                const positions = particlesSystem.geometry.attributes.position.array;
+                const count = particlesSystem.geometry.attributes.position.count;
+
+                // Reactivity Scale (0.0 to 1.0) based on volume
+                const excitement = currentVoiceVolume / 255; // 0 to 1
+                const baseVibration = 0.02;
+                const audioVibration = excitement * 0.5; // Intensity of explosion when loud
+
+                for(let i = 0; i < count; i++) {
+                    const i3 = i * 3;
+                    const orig = originalPositions[i];
+                    
+                    // 1. Base Drift (Quantum Noise)
+                    // We use sine waves based on position + time to create organic drift
+                    const driftX = Math.sin(time + orig.y) * 0.05;
+                    const driftY = Math.cos(time + orig.x) * 0.05;
+                    const driftZ = Math.sin(time + orig.z) * 0.05;
+
+                    // 2. Audio Explosion (Expansion from center of atom)
+                    // Direction vector from atom center
+                    const dirX = orig.x - orig.atomX;
+                    const dirY = orig.y - orig.atomY;
+                    const dirZ = orig.z - orig.atomZ;
+
+                    const expansion = audioVibration * (1 + Math.random()); 
+
+                    positions[i3]     = orig.x + driftX + (dirX * expansion);
+                    positions[i3 + 1] = orig.y + driftY + (dirY * expansion);
+                    positions[i3 + 2] = orig.z + driftZ + (dirZ * expansion);
+                }
+                
+                particlesSystem.geometry.attributes.position.needsUpdate = true;
+                
+                // Slow rotation of entire molecule
+                particlesSystem.rotation.y += 0.002;
+                particlesSystem.rotation.x = Math.sin(time * 0.5) * 0.1;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>
